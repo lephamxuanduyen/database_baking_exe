@@ -50,25 +50,37 @@ order by sum(t_amount) desc;
 
 /*6. Chi nhánh Sài Gòn có bao nhiêu khách hàng không thực hiện bất kỳ giao dịch nào trong vòng 3 năm trở lại đây. Nếu có thể, hãy hiển thị tên và số điện thoại của các khách đó để phòng marketing xử lý.*/
 
-select count(*) 'Khách hàng không thực hiện giao dịch trong 3 năm gần đây'
-from customer c join branch br on c.br_id=br.br_id
+select count(distinct c.cust_id) 'Khách hàng không thực hiện giao dịch trong 3 năm gần đây'
+from customer c join branch br on c.br_id=br.br_id join account a on a.cust_id = c.cust_id
 where br_name like '%Sài Gòn'
-and c.cust_id not in 
-					(select cus.cust_id
+and a.ac_no not in 
+					(select a.ac_no
 					from customer cus join account ac on cus.cust_id = ac.cust_id join branch br on cus.br_id=br.br_id join transactions t on ac.ac_no=t.ac_no
 					where br_name like '%Sài Gòn'
-					and (year(curdate()))-year(t_date)=3)
+					and (year(curdate()))-year(t_date)<3)
 group by c.cust_id;
 
-select c.cust_id 'Mã khách hàng', cust_name 'Tên khách hàng'
-from customer c join branch br on c.br_id=br.br_id
-where br_name like '%Sài Gòn'
-and c.cust_id not in 
-					(select cus.cust_id
-					from customer cus join account ac on cus.cust_id = ac.cust_id join branch br on cus.br_id=br.br_id join transactions t on ac.ac_no=t.ac_no
-					where br_name like '%Sài Gòn'
-					and (year(curdate()))-year(t_date)=3);
+select count(distinct c.cust_id) 'Khách hàng không thực hiện giao dịch trong 3 năm gần đây'
+from account a join customer c on a.cust_id = c.cust_id
+			   join branch br on c.br_id=br.br_id
+			   left outer join transactions t on a.ac_no = t.ac_no
+where br_name like '%Sài Gòn' and (year(curdate())-year(t_date)<3);
 
+select count(distinct c.cust_id) 'Khách hàng không thực hiện giao dịch trong 3 năm gần đây'
+from branch br join customer c on c.br_id=br.br_id
+			    join account a on a.cust_id = c.cust_id
+	left outer join transactions t on a.ac_no = t.ac_no
+where br_name like '%Sài Gòn' 
+	and (t.ac_no is null or (year(curdate())-year(t_date)<3));
+    
+    
+select count(distinct c.cust_id)
+from customer c join branch br on c.br_id=br.br_id
+				join account a on a.cust_id = c.cust_id
+                left outer join transactions t on a.ac_no = t.ac_no
+where br_name like '%Sài Gòn' 
+	and (t.ac_no is null);
+-- ==> dùng subquerry (maybe là ở mệnh đề select)
 /*=============================================================================*/
 
 /*7. Thống kê thông tin giao dịch theo mùa, nội dung thống kê gồm: số lượng giao dịch, lượng tiền giao dịch trung bình, tổng tiền giao dịch, lượng tiền giao dịch nhiều nhất, lượng tiền giao dịch ít nhất.*/
@@ -95,8 +107,8 @@ group by Season;
 select cus.cust_id 'Mã khách hàng', cust_name 'Tên khách hàng',t_id 'Mã giao dịch', t_amount 'Số tiền'
 from customer cus join branch br on cus.br_id=br.br_id join account ac on cus.cust_id=ac.cust_id join transactions t on ac.ac_no=t.ac_no
 where (t_date between '2016/01/01' and '2016/12/31') and br_name like '%Huế'
-	and t_amount >= all
-			(select t_amount
+	and hour(t_amount) >= all
+			(select hour(t_amount)
 			from customer cus join branch br on cus.br_id=br.br_id join account ac on cus.cust_id=ac.cust_id join transactions t on ac.ac_no=t.ac_no
 			where (t_date between '2016/01/01' and '2016/12/31') and br_name like '%Huế');
 
@@ -129,9 +141,9 @@ and cust_name <>'Phan Nguyên Anh';
 /*11. Liệt kê những giao dịch thực hiện cùng giờ với giao dịch của ông Lê Nguyễn Hoàng Văn ngày 2016-12-02*/
 select t_id 'Mã giao dịch', t_type 'Loại', t_amount'Số tiền', cust_name 'Tên khách hàng', a.ac_no'Số tài khoản'
 from transactions t join account a on t.ac_no=a.ac_no join customer c on  c.cust_id=a.cust_id
-where cust_name<>'Lê Nguyễn Hoàng Văn'
-and t_time=
-			(select t_time
+where cust_name<>'Lê Nguyễn Hoàng Văn' and t_date='2016/12/02'
+and hour(t_time)=
+			(select hour(t_time)
 			from transactions t join account a on t.ac_no=a.ac_no join customer c on  c.cust_id=a.cust_id
 			where cust_name = 'Lê Nguyễn Hoàng Văn' and t_date='2016/12/02');
 
@@ -146,11 +158,7 @@ and right(cust_ad,locate(',',reverse(cust_ad))-2)=
 													(select right(cust_ad,locate(',',reverse(cust_ad))-2)
 													from customer
 													where cust_name='Trần Văn Thiện Thanh');
-SELECT
-  name,
-  LOCATE(REGEXP('[0-9]', name), 1) AS position
-FROM
-  customers;                                                
+                                                    
 /*=============================================================================*/
 
 /*13. Tìm những giao dịch diễn ra cùng ngày với giao dịch có mã số 0000000217*/
@@ -438,13 +446,12 @@ group by a.ac_no;
 
 /*36. Ngân hàng cần biết những chi nhánh nào có nhiều giao dịch rút tiền vào buổi chiều để chuẩn bị chuyển tiền tới. Hãy liệt kê danh sách các chi nhánh và lượng tiền rút trung bình theo ngày (chỉ xét những giao dịch diễn ra trong buổi chiều), sắp xếp giảm giần theo lượng tiền giao dịch.*/
 
-select br_name, sum(t_amount)
+select br_name, avg(t_amount)
 from transactions t join account a on t.ac_no=a.ac_no
 					join customer c on a.cust_id=c.cust_id
                     join branch b on c.br_id=b.br_id
 where t_type=0
 group by br_name
-order by sum(t_amount) desc;
+order by avg(t_amount) desc;
 
 /*=============================================================================*/
-
